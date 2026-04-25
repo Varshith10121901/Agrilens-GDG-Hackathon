@@ -1,8 +1,11 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
+import { LanguageProvider } from './context/LanguageContext';
 import Navbar from './components/Navbar';
 import OfflineBanner from './components/OfflineBanner';
+import AskAgent from './components/AskAgent';
 import LandingPage from './pages/LandingPage';
 import HomePage from './pages/HomePage';
 import ScannerPage from './pages/ScannerPage';
@@ -75,6 +78,7 @@ function AppRoutes() {
                     <Route path="/encyclopedia" element={<EncyclopediaPage />} />
                   </Routes>
                 </main>
+                <AskAgent />
               </ProtectedRoute>
             }
           />
@@ -87,9 +91,13 @@ function AppRoutes() {
 export default function App() {
   return (
     <Router>
-      <AuthProvider>
-        <AppRoutes />
-      </AuthProvider>
+      <ThemeProvider>
+        <LanguageProvider>
+          <AuthProvider>
+            <AppRoutes />
+          </AuthProvider>
+        </LanguageProvider>
+      </ThemeProvider>
     </Router>
   );
 }

@@ -4,7 +4,22 @@ export async function getWeatherForecast(latitude, longitude) {
   const params = new URLSearchParams({
     latitude: latitude.toString(),
     longitude: longitude.toString(),
-    daily: 'temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max,uv_index_max,relative_humidity_2m_mean',
+    daily: [
+      'temperature_2m_max',
+      'temperature_2m_min',
+      'precipitation_sum',
+      'precipitation_probability_max',
+      'windspeed_10m_max',
+      'uv_index_max',
+      'relative_humidity_2m_mean',
+      'et0_fao_evapotranspiration',
+      'sunshine_duration',
+      'weathercode',
+    ].join(','),
+    hourly: [
+      'soil_moisture_0_to_7cm',
+      'soil_temperature_0cm',
+    ].join(','),
     current: 'temperature_2m,relative_humidity_2m,weathercode',
     forecast_days: '7',
     timezone: 'auto'
@@ -16,11 +31,102 @@ export async function getWeatherForecast(latitude, longitude) {
       throw new Error(`Weather API error: ${response.status}`);
     }
     const data = await response.json();
+
+    // Compute daily averages for hourly soil data
+    if (data.hourly) {
+      data.daily_soil = computeDailySoilAverages(data);
+    }
+
     return data;
   } catch (error) {
     console.error('Weather fetch error:', error);
     throw error;
   }
+}
+
+// Aggregate hourly soil data into daily averages
+function computeDailySoilAverages(data) {
+  const hourlyTime = data.hourly?.time || [];
+  const soilMoisture = data.hourly?.soil_moisture_0_to_7cm || [];
+  const soilTemp = data.hourly?.soil_temperature_0cm || [];
+
+  const dailyMap = {};
+
+  hourlyTime.forEach((time, i) => {
+    const day = time.split('T')[0];
+    if (!dailyMap[day]) {
+      dailyMap[day] = { moisture: [], temp: [] };
+    }
+    if (soilMoisture[i] != null) dailyMap[day].moisture.push(soilMoisture[i]);
+    if (soilTemp[i] != null) dailyMap[day].temp.push(soilTemp[i]);
+  });
+
+  const dates = Object.keys(dailyMap).sort();
+  return {
+    dates,
+    soil_moisture_avg: dates.map(d => {
+      const vals = dailyMap[d].moisture;
+      return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+    }),
+    soil_temp_avg: dates.map(d => {
+      const vals = dailyMap[d].temp;
+      return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+    }),
+  };
+}
+
+// Reverse geocoding via Nominatim (free, no API key)
+export async function reverseGeocode(latitude, longitude) {
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&addressdetails=1&zoom=12`,
+      { headers: { 'User-Agent': 'AgriLens/1.0' } }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const addr = data.address || {};
+    const name =
+      addr.city || addr.town || addr.village || addr.county ||
+      addr.state_district || addr.state || 'Unknown Location';
+    return {
+      name,
+      state: addr.state || '',
+      country: addr.country || '',
+      full: `${name}${addr.state ? ', ' + addr.state : ''}`,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// Generate weather risk alerts for agriculture
+export function generateWeatherAlerts(days) {
+  const alerts = [];
+
+  days.forEach((day, i) => {
+    const label = i === 0 ? 'Today' : new Date(day.date).toLocaleDateString('en-US', { weekday: 'short' });
+
+    if (day.temp_min != null && day.temp_min < 4) {
+      alerts.push({ type: 'frost', severity: 'high', day: label, message: `Frost risk — ${Math.round(day.temp_min)}°C min` });
+    }
+    if (day.temp_max != null && day.temp_max > 38) {
+      alerts.push({ type: 'heat', severity: 'high', day: label, message: `Heat stress — ${Math.round(day.temp_max)}°C max` });
+    }
+    if (day.precipitation != null && day.precipitation > 20) {
+      alerts.push({ type: 'rain', severity: 'medium', day: label, message: `Heavy rain — ${day.precipitation.toFixed(1)}mm` });
+    }
+    if (day.uv_index != null && day.uv_index > 9) {
+      alerts.push({ type: 'uv', severity: 'medium', day: label, message: `Extreme UV — index ${day.uv_index.toFixed(0)}` });
+    }
+  });
+
+  // Drought check — no rain for 5+ consecutive days
+  const dryDays = days.filter(d => (d.precipitation || 0) < 0.5).length;
+  if (dryDays >= 5) {
+    alerts.push({ type: 'drought', severity: 'high', day: '~', message: `Drought risk — ${dryDays} dry days this week` });
+  }
+
+  return alerts;
 }
 
 export function getWeatherDescription(code) {

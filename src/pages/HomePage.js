@@ -1,25 +1,49 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import { getWeatherForecast, getWeatherDescription, getCurrentSeason, getLocation } from '../services/weatherApi';
 import { getAgricultureNews } from '../services/newsApi';
 import NewsCarousel from '../components/NewsCarousel';
 import NewsCard from '../components/NewsCard';
 import { SkeletonNews } from '../components/Skeletons';
 
-const farmingTips = [
-  "Water early morning to reduce evaporation losses by up to 25%.",
-  "Rotate crops each season to maintain soil health and reduce pest buildup.",
-  "Test your soil pH every season — most crops prefer 6.0-7.0.",
-  "Mulch around plants to retain moisture and suppress weeds naturally.",
-  "Plant companion crops like marigolds to naturally repel harmful insects.",
-  "Apply neem oil spray weekly as a preventive organic pest measure.",
-  "Prune dead leaves regularly to improve air circulation and prevent fungal diseases.",
-  "Add compost to improve soil structure and provide slow-release nutrients.",
-];
+const farmingTips = {
+  en: [
+    "Water early morning to reduce evaporation losses by up to 25%.",
+    "Rotate crops each season to maintain soil health and reduce pest buildup.",
+    "Test your soil pH every season — most crops prefer 6.0-7.0.",
+    "Mulch around plants to retain moisture and suppress weeds naturally.",
+    "Plant companion crops like marigolds to naturally repel harmful insects.",
+    "Apply neem oil spray weekly as a preventive organic pest measure.",
+    "Prune dead leaves regularly to improve air circulation and prevent fungal diseases.",
+    "Add compost to improve soil structure and provide slow-release nutrients.",
+  ],
+  hi: [
+    "सुबह जल्दी सिंचाई करें — वाष्पीकरण 25% तक कम होता है।",
+    "हर मौसम में फसल चक्र अपनाएं — मिट्टी स्वस्थ रहती है।",
+    "हर मौसम में मिट्टी का pH जांचें — 6.0-7.0 सबसे अच्छा है।",
+    "पौधों के आसपास मल्च लगाएं — नमी बनी रहती है।",
+    "गेंदा जैसे साथी पौधे लगाएं — कीटों को दूर रखते हैं।",
+    "नीम तेल का साप्ताहिक छिड़काव करें — जैविक कीट नियंत्रण।",
+    "सूखी पत्तियां नियमित काटें — फफूंद रोग की रोकथाम।",
+    "खाद डालें — मिट्टी की संरचना और पोषण सुधारें।",
+  ],
+  kn: [
+    "ಬೆಳಿಗ್ಗೆ ಮೊದಲು ನೀರಿರಿ — ಆವಿಯಾಗುವಿಕೆ 25% ಕಡಿಮೆ.",
+    "ಪ್ರತಿ ಋತುವಿನಲ್ಲೂ ಬೆಳೆ ಚಕ್ರ — ಮಣ್ಣಿನ ಆರೋಗ್ಯ ಕಾಪಾಡಿ.",
+    "ಮಣ್ಣಿನ pH ಪರೀಕ್ಷಿಸಿ — 6.0-7.0 ಅತ್ಯುತ್ತಮ.",
+    "ಮಲ್ಚ್ ಹಾಕಿ — ತೇವಾಂಶ ಉಳಿಸಿ, ಕಳೆ ತಡೆಯಿರಿ.",
+    "ಚೆಂಡು ಹೂ ಬೆಳೆಸಿ — ಕೀಟಗಳನ್ನು ದೂರ ಇಡಿ.",
+    "ಬೇವಿನ ಎಣ್ಣೆ ಸಿಂಪಡಿಸಿ — ಜೈವಿಕ ಕೀಟ ನಿಯಂತ್ರಣ.",
+    "ಒಣ ಎಲೆಗಳನ್ನು ಕತ್ತರಿಸಿ — ಶಿಲೀಂಧ್ರ ತಡೆಯಿರಿ.",
+    "ಕಂಪೋಸ್ಟ್ ಹಾಕಿ — ಮಣ್ಣಿನ ಗುಣಮಟ್ಟ ಸುಧಾರಿಸಿ.",
+  ],
+};
 
 export default function HomePage() {
   const { farmer } = useAuth();
+  const { t, lang } = useLanguage();
   const [weather, setWeather] = useState(null);
   const [season, setSeason] = useState('');
   const [tipOfDay, setTipOfDay] = useState('');
@@ -30,9 +54,12 @@ export default function HomePage() {
   const currentCrop = farmer?.currentCrop;
 
   useEffect(() => {
-    const dayIndex = new Date().getDate() % farmingTips.length;
-    setTipOfDay(farmingTips[dayIndex]);
+    const tips = farmingTips[lang] || farmingTips.en;
+    const dayIndex = new Date().getDate() % tips.length;
+    setTipOfDay(tips[dayIndex]);
+  }, [lang]);
 
+  useEffect(() => {
     getLocation()
       .then(({ latitude, longitude }) => {
         setSeason(getCurrentSeason(latitude));
@@ -42,11 +69,8 @@ export default function HomePage() {
       .catch(() => setSeason(getCurrentSeason(20)))
       .finally(() => setLoadingWeather(false));
 
-    // Fetch news for the grid below carousel
     getAgricultureNews()
-      .then(articles => {
-        setNewsArticles(articles || []);
-      })
+      .then(articles => setNewsArticles(articles || []))
       .catch(() => {})
       .finally(() => setLoadingNews(false));
   }, []);
@@ -56,12 +80,19 @@ export default function HomePage() {
     ? getWeatherDescription(currentWeather.weathercode)
     : null;
 
+  const featureCards = [
+    { title: t('home.cropScanner'), desc: t('home.cropScannerDesc'), link: '/scanner', color: 'var(--forest-50)', dotColor: 'var(--forest-500)' },
+    { title: t('home.weatherPlanner'), desc: t('home.weatherPlannerDesc'), link: '/weather', color: 'var(--info-50)', dotColor: 'var(--info-500)' },
+    { title: t('home.encyclopedia'), desc: t('home.encyclopediaDesc'), link: '/encyclopedia', color: 'var(--bronze-50)', dotColor: 'var(--bronze-500)' },
+    { title: t('home.myCrop'), desc: t('home.myCropDesc'), link: '/my-crop', color: 'var(--forest-50)', dotColor: 'var(--forest-500)' },
+  ];
+
   return (
     <div className="page-transition page-bottom-padding">
       {/* Personalized Greeting */}
       <section className="mb-6 home-greeting">
-        <h1>Welcome back, {farmer?.name?.split(' ')[0] || 'Farmer'}</h1>
-        <p>Here's your farm overview for today</p>
+        <h1>{t('home.welcome')} {farmer?.name?.split(' ')[0] || 'Farmer'}</h1>
+        <p>{t('home.overview')}</p>
       </section>
 
       {/* News Carousel */}
@@ -75,7 +106,7 @@ export default function HomePage() {
           <Link to="/my-crop" style={{ display: 'block' }}>
             <div className="glass-card glass-card-hover current-crop-card">
               <div>
-                <p style={{ fontSize: '0.75rem', fontWeight: '500', color: 'var(--stone-500)', marginBottom: '0.25rem' }}>Current Crop</p>
+                <p style={{ fontSize: '0.75rem', fontWeight: '500', color: 'var(--stone-500)', marginBottom: '0.25rem' }}>{t('home.currentCrop')}</p>
                 <h3 style={{ fontSize: '1.125rem', fontWeight: '700', color: 'var(--stone-800)' }}>{currentCrop.name}</h3>
                 {currentCrop.lastScan && (
                   <div className="current-crop-status-row">
@@ -84,7 +115,7 @@ export default function HomePage() {
                       currentCrop.lastScan.urgency_level?.toLowerCase() === 'monitor' ? 'status-dot-yellow' : 'status-dot-green'
                     }`} />
                     <span style={{ fontSize: '0.75rem', color: 'var(--stone-500)' }}>
-                      {currentCrop.lastScan.disease_detected === 'Healthy' ? 'Healthy' : currentCrop.lastScan.disease_detected}
+                      {currentCrop.lastScan.disease_detected === 'Healthy' ? t('common.healthy') : currentCrop.lastScan.disease_detected}
                     </span>
                   </div>
                 )}
@@ -115,7 +146,7 @@ export default function HomePage() {
                 </svg>
               </div>
               <div>
-                <p className="stat-label">Today's Weather</p>
+                <p className="stat-label">{t('home.weather')}</p>
                 <p className="stat-value">{Math.round(currentWeather.temperature_2m)}°C</p>
                 <p className="stat-desc">{weatherInfo.text}</p>
               </div>
@@ -129,8 +160,8 @@ export default function HomePage() {
                 </svg>
               </div>
               <div>
-                <p className="stat-label">Weather</p>
-                <p style={{ fontSize: '0.875rem', color: 'var(--stone-600)' }}>Enable location</p>
+                <p className="stat-label">{t('home.weather')}</p>
+                <p style={{ fontSize: '0.875rem', color: 'var(--stone-600)' }}>{t('home.enableLocation')}</p>
               </div>
             </>
           )}
@@ -145,8 +176,8 @@ export default function HomePage() {
             </svg>
           </div>
           <div>
-            <p className="stat-label">Current Season</p>
-            <p className="stat-value">{season || 'Detecting...'}</p>
+            <p className="stat-label">{t('home.season')}</p>
+            <p className="stat-value">{season || t('home.detecting')}</p>
           </div>
         </div>
 
@@ -159,7 +190,7 @@ export default function HomePage() {
             </svg>
           </div>
           <div>
-            <p className="stat-label">Tip of the Day</p>
+            <p className="stat-label">{t('home.tipOfDay')}</p>
             <p style={{ fontSize: '0.75rem', color: 'var(--stone-700)', lineHeight: '1.5' }}>{tipOfDay}</p>
           </div>
         </div>
@@ -167,14 +198,9 @@ export default function HomePage() {
 
       {/* Feature Cards */}
       <section className="mb-8">
-        <h2 className="section-title mb-4">Quick Access</h2>
+        <h2 className="section-title mb-4">{t('home.quickAccess')}</h2>
         <div className="feature-grid">
-          {[
-            { title: 'Crop Scanner', desc: 'AI-powered disease detection and treatment plans', link: '/scanner', color: 'var(--forest-50)', dotColor: 'var(--forest-500)' },
-            { title: 'Weather Planner', desc: '7-day forecast with irrigation scheduling', link: '/weather', color: 'var(--info-50)', dotColor: 'var(--info-500)' },
-            { title: 'Encyclopedia', desc: 'Complete crop profiles and growing guides', link: '/encyclopedia', color: 'var(--bronze-50)', dotColor: 'var(--bronze-500)' },
-            { title: 'My Crop', desc: 'Your personalized crop dashboard and history', link: '/my-crop', color: 'var(--forest-50)', dotColor: 'var(--forest-500)' },
-          ].map((card) => (
+          {featureCards.map((card) => (
             <Link key={card.title} to={card.link} className="glass-card glass-card-hover feature-card">
               <div className="feature-card-icon" style={{ background: card.color }}>
                 <div style={{ width: '0.625rem', height: '0.625rem', borderRadius: '50%', background: card.dotColor }} />
@@ -188,7 +214,7 @@ export default function HomePage() {
 
       {/* Latest Agriculture News */}
       <section>
-        <h2 className="section-title mb-4">Latest Agriculture News</h2>
+        <h2 className="section-title mb-4">{t('home.latestNews')}</h2>
         {loadingNews ? (
           <SkeletonNews />
         ) : newsArticles.length > 0 ? (
